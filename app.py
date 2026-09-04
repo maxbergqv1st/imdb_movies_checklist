@@ -1,75 +1,33 @@
 import os
-import streamlit as st
-import pandas as pd
 import json
 from pathlib import Path
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+import streamlit as st
 from dotenv import load_dotenv
+
+from data.loader import load_df
+from pipeline import build_pipeline
 
 load_dotenv()
 
 WATCHED_FILE = Path("watched.json")
 DEFAULT_CSV = Path(os.getenv("CSV_PATH", "movies.csv"))
 
-COLUMN_ALIASES = {
-    "Series_Title": "title", "Title": "title", "name": "title",
-    "Released_Year": "year", "Year": "year",
-    "IMDB_Rating": "rating", "Rating": "rating", "imdb_rating": "rating",
-    "Genre": "genre",
-    "Overview": "overview", "Description": "overview", "description": "overview",
-    "Director": "director",
-    "Runtime": "runtime",
-    "No_of_Votes": "votes", "Votes": "votes",
-}
 
-
-def load_df(source):
-    df = pd.read_csv(source)
-    return df.rename(columns={k: v for k, v in COLUMN_ALIASES.items() if k in df.columns})
-
-
-def load_watched():
+def load_watched() -> set:
     if WATCHED_FILE.exists():
         return set(json.loads(WATCHED_FILE.read_text()))
     return set()
 
 
-def save_watched(watched):
+def save_watched(watched: set) -> None:
     WATCHED_FILE.write_text(json.dumps(list(watched)))
-
-
-def recommend(df, watched, n):
-    unwatched = df[~df["title"].isin(watched)].copy()
-    if not watched or "genre" not in df.columns:
-        return unwatched.nlargest(n, "rating") if "rating" in unwatched.columns else unwatched.head(n)
-
-    tfidf = TfidfVectorizer()
-    matrix = tfidf.fit_transform(df["genre"].fillna(""))
-
-    watched_mask = df["title"].isin(watched)
-    profile = matrix[watched_mask.values].mean(axis=0)
-
-    unwatched_idx = (~watched_mask).values
-    sims = cosine_similarity(profile, matrix[unwatched_idx]).flatten()
-
-    unwatched = unwatched.copy()
-    unwatched["_sim"] = sims
-
-    if "rating" in unwatched.columns:
-        r = unwatched["rating"]
-        rng = r.max() - r.min()
-        r_norm = (r - r.min()) / rng if rng else 0
-        unwatched["_score"] = 0.6 * unwatched["_sim"] + 0.4 * r_norm
-    else:
-        unwatched["_score"] = unwatched["_sim"]
-
-    return unwatched.nlargest(n, "_score").drop(columns=["_sim", "_score"])
 
 
 st.set_page_config(page_title="IMDB Checklist", layout="wide")
 st.title("IMDB Movie Checklist")
 
+# --- Data loading ---
 if "df" not in st.session_state:
     if DEFAULT_CSV.exists():
         st.session_state.df = load_df(DEFAULT_CSV)
@@ -89,6 +47,7 @@ display_cols = [c for c in ["title", "year", "rating", "genre", "director", "run
 
 tab1, tab2 = st.tabs(["All Movies", "Recommendations"])
 
+# --- Tab 1: Checklist ---
 with tab1:
     c1, c2, c3 = st.columns([3, 1, 1])
     search = c1.text_input("Search")
@@ -108,7 +67,7 @@ with tab1:
         view = view[~view["title"].isin(watched)]
     if genre_filter:
         view = view[view["genre"].apply(
-            lambda x: any(g in str(x) for g in genre_filter) if pd.notna(x) else False
+            lambda x: any(g in str(x) for g in genre_filter) if __import__("pandas").notna(x) else False
         )]
 
     view = view.copy()
@@ -127,9 +86,19 @@ with tab1:
 
     st.caption(f"{len(watched)} watched · {len(df) - len(watched)} remaining")
 
+# --- Tab 2: Recommendations ---
 with tab2:
     n = st.slider("How many?", 5, 50, 10)
-    recs = recommend(df, watched, n)
+
+    watched_hash = hash(frozenset(watched))
+    if st.session_state.get("pipeline_hash") != watched_hash:
+        with st.spinner("Fitting models..."):
+            pipeline = build_pipeline()
+            pipeline.fit(df, watched)
+            st.session_state.pipeline = pipeline
+            st.session_state.pipeline_hash = watched_hash
+
+    recs = st.session_state.pipeline.recommend(n)
     rec_cols = [c for c in display_cols if c in recs.columns]
     st.dataframe(recs[rec_cols] if rec_cols else recs, use_container_width=True, hide_index=True)
-    st.caption("Ranked by genre overlap with your watched history, then by IMDB rating")
+    st.caption("Cosine similarity (60%) + Logistic Regression (40%) · re-fits when watched list changes")
