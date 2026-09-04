@@ -1,28 +1,16 @@
 import os
-import json
+import re
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from data.loader import load_df
+from data.loader import load_df, load_watched, save_watched
 from pipeline import build_pipeline
 
 load_dotenv()
 
-WATCHED_FILE = Path("watched.json")
 DEFAULT_CSV = Path(os.getenv("CSV_PATH", "movies.csv"))
-
-
-def load_watched() -> set:
-    if WATCHED_FILE.exists():
-        return set(json.loads(WATCHED_FILE.read_text()))
-    return set()
-
-
-def save_watched(watched: set) -> None:
-    WATCHED_FILE.write_text(json.dumps(list(watched)))
-
 
 st.set_page_config(page_title="IMDB Checklist", layout="wide")
 st.title("IMDB Movie Checklist")
@@ -75,11 +63,9 @@ with tab1:
     elif show == "Unwatched":
         view = view[~view["title"].isin(watched)]
     if genre_filter:
-        view = view[view["genre"].apply(
-            lambda x: any(g in str(x) for g in genre_filter) if __import__("pandas").notna(x) else False
-        )]
+        pattern = "|".join(re.escape(g) for g in genre_filter)
+        view = view[view["genre"].str.contains(pattern, na=False)]
 
-    view = view.copy()
     view["watched"] = view["title"].isin(watched)
 
     edited = st.data_editor(
@@ -89,9 +75,10 @@ with tab1:
         hide_index=True,
     )
 
-    for _, row in edited.iterrows():
-        watched.add(row["title"]) if row["watched"] else watched.discard(row["title"])
-    save_watched(watched)
+    new_watched = set(edited.loc[edited["watched"], "title"])
+    if new_watched != watched:
+        save_watched(new_watched)
+    watched = new_watched
 
     st.caption(f"{len(watched)} watched · {len(df) - len(watched)} remaining")
 

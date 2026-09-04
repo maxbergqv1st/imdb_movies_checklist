@@ -9,22 +9,28 @@ import pandas as pd
 BASICS_URL  = "https://datasets.imdbws.com/title.basics.tsv.gz"
 RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"
 
+_BASICS_COLS = ["tconst", "titleType", "primaryTitle", "startYear", "runtimeMinutes", "genres"]
 
-def _fetch(url: str) -> pd.DataFrame:
-    with urllib.request.urlopen(url) as resp:
+
+def _fetch_basics() -> pd.DataFrame:
+    with urllib.request.urlopen(BASICS_URL) as resp:
         with gzip.open(resp) as f:
-            return pd.read_csv(f, sep="\t", na_values="\\N", low_memory=False)
+            df = pd.read_csv(f, sep="\t", na_values="\\N", low_memory=False, usecols=_BASICS_COLS)
+    return df[df["titleType"] == "movie"].drop(columns=["titleType"])
+
+
+def _fetch_ratings() -> pd.DataFrame:
+    with urllib.request.urlopen(RATINGS_URL) as resp:
+        with gzip.open(resp) as f:
+            return pd.read_csv(f, sep="\t", na_values="\\N")
 
 
 def fetch_movies(out: str = "movies.csv", min_votes: int = 5_000) -> pd.DataFrame:
     print("Laddar basics...")
-    basics = _fetch(BASICS_URL)
-    movies = basics[basics["titleType"] == "movie"][
-        ["tconst", "primaryTitle", "startYear", "runtimeMinutes", "genres"]
-    ]
+    movies = _fetch_basics()
 
     print("Laddar ratings...")
-    ratings = _fetch(RATINGS_URL)
+    ratings = _fetch_ratings()
 
     df = (
         movies.merge(ratings, on="tconst")

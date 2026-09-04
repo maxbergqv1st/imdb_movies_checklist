@@ -22,5 +22,5 @@ class EnsembleRecommender(BaseRecommender):
 
     def recommend(self, n: int = 10) -> pd.DataFrame:
         unwatched = self._df[~self._df["title"].isin(self._watched)].copy()
-        unwatched["score"] = self.score(self._df).loc[unwatched.index]
+        unwatched["score"] = self.score(unwatched)
         return unwatched.nlargest(n, "score").drop(columns=["score"])
