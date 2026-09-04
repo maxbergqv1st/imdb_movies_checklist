@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.csv
+watched.json
+.DS_Store
+.ipynb_checkpoints/
