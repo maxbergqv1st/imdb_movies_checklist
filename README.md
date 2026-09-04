@@ -27,7 +27,7 @@ imdb_movies_checklist/
 ## Krav
 
 - Python 3.10+
-- En IMDB-CSV från Kaggle, t.ex. [Top 1000 Movies](https://www.kaggle.com/datasets/harshitshankhdhar/imdb-dataset-of-top-1000-movies-and-tv-shows)
+- Internetanslutning (för automatisk nedladdning av IMDB-data)
 
 ---
 
@@ -48,23 +48,17 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Lägg till dataset
+### 3. Hämta data
 
-Ladda ner din Kaggle-CSV och döp om den till `movies.csv` i projektmappen:
+**Alternativ A — automatiskt i appen (rekommenderas)**
 
-```bash
-mv ~/Downloads/imdb_top_1000.csv movies.csv
-```
+Starta appen (se nästa steg). Klicka **"Ladda ner IMDB-data"** i startskärmen. Hämtar ~15 000 filmer direkt från [datasets.imdbws.com](https://datasets.imdbws.com) och sparar som `movies.csv`. Tar ~30 sekunder.
 
-Alternativt: ändra sökvägen i `.env`:
+**Alternativ B — ladda upp egen CSV**
 
-```
-CSV_PATH=sökväg/till/din/fil.csv
-```
+Ladda upp valfri IMDB-CSV via knappen i startskärmen. Kolumnnamn normaliseras automatiskt:
 
-Stödda kolumnnamn (normaliseras automatiskt):
-
-| Kaggle-kolumn | Intern namn |
+| Original | Intern |
 |---|---|
 | `Series_Title` / `Title` | `title` |
 | `Released_Year` / `Year` | `year` |
@@ -74,6 +68,12 @@ Stödda kolumnnamn (normaliseras automatiskt):
 | `Director` | `director` |
 | `Runtime` | `runtime` |
 | `No_of_Votes` / `Votes` | `votes` |
+
+**Alternativ C — terminal**
+
+```bash
+python3 -m data.download          # sparar movies.csv med min 5000 röster
+```
 
 ---
 

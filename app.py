@@ -32,14 +32,23 @@ if "df" not in st.session_state:
     if DEFAULT_CSV.exists():
         st.session_state.df = load_df(DEFAULT_CSV)
     else:
-        uploaded = st.sidebar.file_uploader("Upload IMDB CSV", type="csv")
+        st.info("Ingen data hittad. Ladda ner officiellt IMDB-dataset eller ladda upp en egen CSV.")
+        col1, col2 = st.columns(2)
+
+        if col1.button("Ladda ner IMDB-data (~15 000 filmer)", type="primary"):
+            from data.download import fetch_movies
+            with st.spinner("Hämtar från datasets.imdbws.com — tar ~30 sek..."):
+                st.session_state.df = fetch_movies(str(DEFAULT_CSV))
+            st.rerun()
+
+        uploaded = col2.file_uploader("Eller ladda upp egen CSV", type="csv")
         if uploaded:
             st.session_state.df = load_df(uploaded)
-        else:
-            st.info("Drop `movies.csv` in this folder or upload via the sidebar.")
-            st.stop()
+            st.rerun()
+
+        st.stop()
 else:
-    st.sidebar.caption(f"{len(st.session_state.df)} titles loaded")
+    st.sidebar.caption(f"{len(st.session_state.df)} titlar inladdade")
 
 df = st.session_state.df
 watched = load_watched()
